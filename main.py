@@ -3,6 +3,7 @@ import json
 import pandas as pd
 import logging
 import openpyxl
+from job import Job
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -12,38 +13,8 @@ from selenium.common.exceptions import NoSuchElementException
 
 logging.getLogger().setLevel(logging.INFO)
 
-class Job:
-    def __init__(self, company, title, status, application_num, num_openings, work_duration, location, description, responsibilities, skills, pay = None, rating = None, num_rating = None, compatibility = None):
-        self.company = company
-        self.title = title
-        self.status = status
-        self.application_num = application_num
-        self.num_openings = num_openings
-        self.work_duration = work_duration 
-        self.location = location
-        self.description = description
-        self.responsibilities = responsibilities
-        self.skills = skills
-        self.pay = pay 
-        self.rating = rating
-        self.num_rating = num_rating
-        self.compatibility = compatibility # 0 - 1
-        
-    # [company, title, status, applicates per position, work duration, location, description, responsibilities, skills, pay, rating, num_rating]
-    def to_list(self):
-        return [self.company, self.title, self.status, self.application_num / self.num_openings, self.work_duration, self.location,
-                self.pay, self.rating, self.num_rating, self.description, self.responsibilities, self.skills]
-
 driver = webdriver.Chrome()
 wait = WebDriverWait(driver, 10)
-
-def main():
-    try:
-        username, password = get_credentials()
-        login(username, password)
-        get_shortlisted_info()
-    except Exception as e:
-        logging.error(f"Failed to get shortlisted info: Error {e}")
 
 # Read appsettings.json and return credentials
 def get_credentials():
@@ -70,13 +41,6 @@ def login(username, password):
     logging.info("Waiting for duo authentication to complete")
     time.sleep(25)
 
-def _is_next():
-    try:
-        driver.find_element(By.PARTIAL_LINK_TEXT, "»")
-        return True
-    except NoSuchElementException:
-        return False 
-
 # get all jobs from all pages in Shortlist page
 def get_shortlisted_info():
     # redirect to shortlist page
@@ -90,12 +54,12 @@ def get_shortlisted_info():
     shortlisted = []
     page_num = 1
 
-    get_shortlist_info(shortlisted)
+    _get_shortlist_info(shortlisted)
     logging.info(f"Finished getting shortlisted jobs on page {page_num}")
 
     # if there exists pages to paginate, continue going through the pages
-    is_pagination = _is_next()
-    if is_pagination:
+    can_pagination = _can_paginate()
+    if can_pagination:
         is_next_enabled = driver.find_element(By.PARTIAL_LINK_TEXT, "»").find_element(By.XPATH, "..").get_attribute("class")
 
         # pagination to get rest of shortlist
@@ -105,31 +69,38 @@ def get_shortlisted_info():
             driver.execute_script("window.scrollTo(0, 0);")
             next_button.click()
             time.sleep(1) # sleep so that next page can be loaded
-            get_shortlist_info(shortlisted)
+            _get_shortlist_info(shortlisted)
             logging.info(f"Finished getting shortlisted jobs on page {page_num}")
 
             is_next_enabled = driver.find_element(By.PARTIAL_LINK_TEXT, "»").find_element(By.XPATH, "..").get_attribute("class")
 
     # order based on user preference
-    sort_shortlisted(shortlisted)
+    _sort_shortlisted(shortlisted)
 
-    # insert to excel
-    insert_to_excel(shortlisted)
+    # insert jobs to excel
+    _insert_to_excel(shortlisted)
+
+# returns true if pagination is possible
+def _can_paginate():
+    try:
+        driver.find_element(By.PARTIAL_LINK_TEXT, "»")
+        return True
+    except NoSuchElementException:
+        return False 
 
 # get all jobs on current Shortlist page
-def get_shortlist_info(shortlisted):
+def _get_shortlist_info(shortlisted):
     # get shortlist info
     table = driver.find_element(By.ID, 'postingsTableDiv')
     tbody = table.find_element(By.TAG_NAME, 'tbody')
     rows = tbody.find_elements(By.TAG_NAME, "tr") # get all of the rows in the table
     shortlist_len = len(rows)
 
-    #for row in rows:
     for i in range(shortlist_len):
         row = rows[i]
         app_status = row.find_elements(By.TAG_NAME, "td")[1].accessible_name
 
-        if app_status == "": # only get jobs i havent applied to
+        if app_status == "": # only get jobs I haven't applied to
             # get info from job in current row 
             company = row.find_elements(By.TAG_NAME, "td")[4].accessible_name
             title = row.find_elements(By.TAG_NAME, "td")[3].accessible_name
@@ -158,14 +129,14 @@ def get_shortlist_info(shortlisted):
 # get job info from page
 def scrape_job(company, title, status, application_num):
     try:
-        num_openings = get_table_value('Job Openings:')
-        work_duration = get_table_value('Work Term Duration:')
-        location = get_table_value('City') + ", " + get_table_value('Country:')
-        description = get_table_value('Job Summary:')
-        responsibilities = get_table_value('Job Responsibilities:')
-        skills = get_table_value('Required Skills:')
-        pay = get_table_value('Compensation and Benefits Information:')
-        rating, num_rating = get_ratings()
+        num_openings = _get_table_value('Job Openings:')
+        work_duration = _get_table_value('Work Term Duration:')
+        location = _get_table_value('City') + ", " + _get_table_value('Country:')
+        description = _get_table_value('Job Summary:')
+        responsibilities = _get_table_value('Job Responsibilities:')
+        skills = _get_table_value('Required Skills:')
+        pay = _get_table_value('Compensation and Benefits Information:')
+        rating, num_rating = _get_ratings()
 
         # [company, title, applicates per position, work duration, location, description, responsibilities, skills, pay, rating, num_rating]
         job = Job(company, title, status, int(application_num), int(num_openings), work_duration, location, description, responsibilities, skills, pay, rating, num_rating)
@@ -174,11 +145,10 @@ def scrape_job(company, title, status, application_num):
         return job
     
     except Exception as e:
-        logging.error(f"Exception at {company} - {title}")
-        raise
+        logging.error(f"Exception at {company} - {title}. {e}")
 
 # get rating info
-def get_ratings():
+def _get_ratings():
     try:
         rating_element = driver.find_elements(By.XPATH, "//a[contains(text(), 'Work Term Ratings')]//span[@class='badge badge-info']")
 
@@ -186,8 +156,8 @@ def get_ratings():
         if rating_element:
             wait.until(EC.element_to_be_clickable((By.PARTIAL_LINK_TEXT, "Work Term Ratings"))).click()
             wait.until(EC.presence_of_element_located((By.XPATH, "//*[text()='Work Term Ratings Summary']"))) # wait until page loads
-            rating = get_table_value_with_index(2)
-            num_ratings = int(get_table_value_with_index(3))
+            rating = __get_table_value_with_index(2)
+            num_ratings = int(__get_table_value_with_index(3))
             return rating, num_ratings
         else:
             return "", ""
@@ -196,7 +166,7 @@ def get_ratings():
         logging.error(e)
 
 # get value of job information given table key
-def get_table_value(key):
+def _get_table_value(key):
     try:
         xpath_expression = f"//td[contains(., '{key}')]"
         key_td = driver.find_elements(By.XPATH, xpath_expression)
@@ -207,10 +177,9 @@ def get_table_value(key):
 
     except Exception as e:
         logging.error(f"Exception on key {key}", e)
-        raise
     
 # get value of job information given table key
-def get_table_value_with_index(index):
+def __get_table_value_with_index(index):
     try:
         xpath_expression = f"(//table[@class='table table-bordered table-striped'])[2]//td[contains(., 'Employer Organization')]/following-sibling::td[{index}]"
         value = driver.find_elements(By.XPATH, xpath_expression)
@@ -222,12 +191,12 @@ def get_table_value_with_index(index):
     except Exception as e:
         logging.error(e)
 
-# ML stuff to train and get shortlisted stuff
-def sort_shortlisted(shortlisted):
+# TODO: sort shortlisted based on user prefrance 
+def _sort_shortlisted(shortlisted):
     pass
 
 # insert into excel
-def insert_to_excel(shortlisted):
+def _insert_to_excel(shortlisted):
     logging.info("Inserting shortlisted data info into excel")
 
     column_names = ["Company", "Title", "Status", "Applicants Per Position", "Work Duration", "Location", "Pay", "Rating", "Num Ratings", "Description", "Responsibilities", "Skills"]
@@ -240,9 +209,9 @@ def insert_to_excel(shortlisted):
 
     df = pd.DataFrame(job_items, columns=column_names)
 
-    # Create a Pandas Excel writer using XlsxWriter as the engine.
-    file_name = "new_data_1.xlsx" # waterloo_works_shortlist.xlsx
-    sheet_name = "New Data"# 'Waterloo Works Shortlist'
+    # Create a Pandas Excel writer using XlsxWriter as the engine
+    file_name = "waterloo_works_shortlist.xlsx"
+    sheet_name = 'Waterloo Works Shortlist'
     writer = pd.ExcelWriter(file_name, engine='xlsxwriter')
 
     with pd.ExcelWriter(file_name, engine='openpyxl') as writer:
@@ -256,6 +225,14 @@ def insert_to_excel(shortlisted):
             worksheet.column_dimensions[worksheet.cell(row=1, column=i+1).column_letter].alignment = openpyxl.styles.Alignment(wrap_text=True)
     
     logging.info(f"Finished inserting shortlisted data info into {file_name}")
+
+def main():
+    try:
+        username, password = get_credentials()
+        login(username, password)
+        get_shortlisted_info()
+    except Exception as e:
+        logging.error(f"Failed to get shortlisted info: Error {e}")
 
 if __name__ == "__main__":
     main()
