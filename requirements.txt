@@ -2,3 +2,4 @@ wheel
 pandas
 openpyxl
 selenium
+xlsxwriter
