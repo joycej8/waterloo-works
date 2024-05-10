@@ -1,12 +1,17 @@
 import time
 import json
 import pandas as pd
+import logging
+import openpyxl
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
+from selenium.common.exceptions import NoSuchElementException
+
+logging.getLogger().setLevel(logging.INFO)
 
 class Job:
     def __init__(self, company, title, status, application_num, num_openings, work_duration, location, description, responsibilities, skills, pay = None, rating = None, num_rating = None, compatibility = None):
@@ -34,9 +39,12 @@ driver = webdriver.Chrome()
 wait = WebDriverWait(driver, 10)
 
 def main():
-    username, password = get_credentials()
-    login(username, password)
-    get_shortlisted_info()
+    try:
+        username, password = get_credentials()
+        login(username, password)
+        get_shortlisted_info()
+    except Exception as e:
+        logging.error(f"Failed to get shortlisted info: Error {e}")
 
 # Read appsettings.json and return credentials
 def get_credentials():
@@ -51,7 +59,7 @@ def get_credentials():
 # log into waterloo works with username and password
 def login(username, password):
     url = 'https://waterlooworks.uwaterloo.ca/waterloo.htm?action=login'
-    
+
     # login
     driver.get(url)
     driver.find_element(By.ID, "userNameInput").send_keys(username)
@@ -59,32 +67,49 @@ def login(username, password):
     driver.find_element(By.ID, "passwordInput").send_keys(password)
     driver.find_element(By.ID, "submitButton").click()
 
-    time.sleep(15)
-    
+    # time to put in duo code for 2fa. #TODO: make it automatic if possible
+    logging.info("Waiting for duo authentication to complete")
+    time.sleep(25)
+
+def _is_next():
+    try:
+        driver.find_element(By.PARTIAL_LINK_TEXT, "»")
+        return True
+    except NoSuchElementException:
+        return False 
+
 # get all jobs from all pages in Shortlist page
 def get_shortlisted_info():
     # redirect to shortlist page
-    coop_postings_url = 'https://waterlooworks.uwaterloo.ca/myAccount/co-op/coop-postings.htm'
+    coop_postings_url = 'https://waterlooworks.uwaterloo.ca/myAccount/co-op/full/jobs.htm'
     driver.get(coop_postings_url)
 
-    shortlist_link = wait.until(EC.element_to_be_clickable((By.PARTIAL_LINK_TEXT, "Viewed"))) # changed to viewed, orignally SHORTLIST
+    shortlist_link = wait.until(EC.element_to_be_clickable((By.PARTIAL_LINK_TEXT, "Shortlist")))
     shortlist_link.click()
 
     # get shortlist info
     shortlisted = []
+    page_num = 1
+
     get_shortlist_info(shortlisted)
+    logging.info(f"Finished getting shortlisted jobs on page {page_num}")
 
-    is_next_enabled = driver.find_element(By.PARTIAL_LINK_TEXT, "»").find_element(By.XPATH, "..").get_attribute("class")
-    
-    # pagination to get rest of shortlist
-    if "disabled" not in is_next_enabled:
-        next_button = wait.until(EC.element_to_be_clickable((By.PARTIAL_LINK_TEXT, "»")))
-        driver.execute_script("window.scrollTo(0, 0);")
-        next_button.click()
-        time.sleep(1) # sleep so that next page can be loaded
-        get_shortlist_info(shortlisted)
-
+    # if there exists pages to paginate, continue going through the pages
+    is_pagination = _is_next()
+    if is_pagination:
         is_next_enabled = driver.find_element(By.PARTIAL_LINK_TEXT, "»").find_element(By.XPATH, "..").get_attribute("class")
+
+        # pagination to get rest of shortlist
+        while "disabled" not in is_next_enabled:
+            next_button = wait.until(EC.element_to_be_clickable((By.PARTIAL_LINK_TEXT, "»")))
+            page_num += 1
+            driver.execute_script("window.scrollTo(0, 0);")
+            next_button.click()
+            time.sleep(1) # sleep so that next page can be loaded
+            get_shortlist_info(shortlisted)
+            logging.info(f"Finished getting shortlisted jobs on page {page_num}")
+
+            is_next_enabled = driver.find_element(By.PARTIAL_LINK_TEXT, "»").find_element(By.XPATH, "..").get_attribute("class")
 
     # order based on user preference
     sort_shortlisted(shortlisted)
@@ -145,15 +170,13 @@ def scrape_job(company, title, status, application_num):
 
         # [company, title, applicates per position, work duration, location, description, responsibilities, skills, pay, rating, num_rating]
         job = Job(company, title, status, int(application_num), int(num_openings), work_duration, location, description, responsibilities, skills, pay, rating, num_rating)
-        
-        print("Finished ", company, title)
 
+        logging.info(f"Finished {company} {title}")
         return job
     
     except Exception as e:
-        print(f"Exception at {company} - {title}")
+        logging.error(f"Exception at {company} - {title}")
         raise
-
 
 # get rating info
 def get_ratings():
@@ -169,9 +192,9 @@ def get_ratings():
             return rating, num_ratings
         else:
             return "", ""
-    
+
     except Exception as e:
-        print(e)
+        logging.error(e)
 
 # get value of job information given table key
 def get_table_value(key):
@@ -184,7 +207,7 @@ def get_table_value(key):
             return ""
 
     except Exception as e:
-        print(f"Exception on key {key}", e)
+        logging.error(f"Exception on key {key}", e)
         raise
     
 # get value of job information given table key
@@ -198,15 +221,16 @@ def get_table_value_with_index(index):
             return ""
 
     except Exception as e:
-        print(e)
+        logging.error(e)
 
 # ML stuff to train and get shortlisted stuff
 def sort_shortlisted(shortlisted):
-    
     pass
 
 # insert into excel
 def insert_to_excel(shortlisted):
+    logging.info("Inserting shortlisted data info into excel")
+
     column_names = ["Company", "Title", "Status", "Applicants Per Position", "Work Duration", "Location", "Pay", "Rating", "Num Ratings", "Description", "Responsibilities", "Skills"]
     job_items = []
 
@@ -218,7 +242,7 @@ def insert_to_excel(shortlisted):
     df = pd.DataFrame(job_items, columns=column_names)
 
     # Create a Pandas Excel writer using XlsxWriter as the engine.
-    file_name = "new_data.xlsx" # waterloo_works_shortlist.xlsx
+    file_name = "new_data_1.xlsx" # waterloo_works_shortlist.xlsx
     sheet_name = "New Data"# 'Waterloo Works Shortlist'
     writer = pd.ExcelWriter(file_name, engine='xlsxwriter')
 
@@ -231,6 +255,8 @@ def insert_to_excel(shortlisted):
             max_len = min(max(df[col].astype(str).apply(len).max(), len(col)), max_width)
             worksheet.column_dimensions[worksheet.cell(row=1, column=i+1).column_letter].width = max_len + 2
             worksheet.column_dimensions[worksheet.cell(row=1, column=i+1).column_letter].alignment = openpyxl.styles.Alignment(wrap_text=True)
+    
+    logging.info(f"Finished inserting shortlisted data info into {file_name}")
 
 if __name__ == "__main__":
     main()
