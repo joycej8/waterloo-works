@@ -1,0 +1,6 @@
+# values from 0 - 1
+
+work_duration:
+  4: 1
+  8: 0
+  12: 1
