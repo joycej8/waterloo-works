@@ -3,6 +3,7 @@ import json
 import pandas as pd
 import logging
 import openpyxl
+from job_prioritization import sort_shortlisted_by_confidence
 from job import Job
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -75,7 +76,7 @@ def get_shortlisted_info():
             is_next_enabled = driver.find_element(By.PARTIAL_LINK_TEXT, "»").find_element(By.XPATH, "..").get_attribute("class")
 
     # order based on user preference
-    _sort_shortlisted(shortlisted)
+    shortlisted = sort_shortlisted_by_confidence(shortlisted)
 
     # insert jobs to excel
     _insert_to_excel(shortlisted)
@@ -157,7 +158,7 @@ def _get_ratings_and_hiring_history():
             wait.until(EC.element_to_be_clickable((By.PARTIAL_LINK_TEXT, "Work Term Ratings"))).click()
             wait.until(EC.presence_of_element_located((By.XPATH, "//*[text()='Work Term Ratings Summary']"))) # wait until page loads
             time.sleep(0.5) # TODO: have a better fix
-            rating = _get_table_value_with_index(2)
+            rating = float(_get_table_value_with_index(2))
             num_ratings = int(_get_table_value_with_index(3))
             programs_hired = _get_most_freq_hired_programs()
             faculty_hired = _get_hire_by_faculty()
@@ -223,16 +224,12 @@ def _get_table_value_with_index(index):
     except Exception as e:
         logging.error(e)
 
-# TODO: sort shortlisted based on user prefrance 
-def _sort_shortlisted(shortlisted):
-    pass
-
 # insert into excel
 def _insert_to_excel(shortlisted):
     try:
         logging.info("Inserting shortlisted data info into excel")
 
-        column_names = ["Company", "Title", "Status", "Applicants Per Position", "Work Duration", "Location", "Pay", "Rating", "Num Ratings", "Hires By Program", "Hires By Faculty", "Hires By Work Term", "Description", "Responsibilities", "Skills"]
+        column_names = ["Compatibility", "Company", "Title", "Status", "Applicants Per Position", "Work Duration", "Location", "Pay", "Rating", "Num Ratings", "Hires By Program", "Hires By Faculty", "Hires By Work Term", "Description", "Responsibilities", "Skills"]
         job_items = []
 
         # object to list
@@ -243,7 +240,7 @@ def _insert_to_excel(shortlisted):
         df = pd.DataFrame(job_items, columns=column_names)
 
         # Create a Pandas Excel writer using XlsxWriter as the engine
-        file_name = "waterloo_works_shortlist.xlsx"
+        file_name = "waterloo_works_shortlist_sorted.xlsx"
         sheet_name = 'Waterloo Works Shortlist'
         writer = pd.ExcelWriter(file_name, engine='xlsxwriter')
 

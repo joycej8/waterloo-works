@@ -1,5 +1,16 @@
-work_duration: 4
-pay: 30
-program: "Computer Science/BCS"
-faculty: "Mathematics"
-work_term: 4
+user_details:
+  employment_duration_months: 4
+  hourly_rate: 30
+  study_program: "Computer Science/BCS"
+  academic_faculty: "Mathematics"
+  current_work_term: "Fourth"
+
+# Priorities are assigned a weight from 1 to 10, where 10 indicates the highest priority.
+# TODO: better system
+priority_weights:
+  employment_duration_months: 8
+  hourly_rate: 5
+  study_program: 4
+  academic_faculty: 4
+  current_work_term: 4
+  rating: 7

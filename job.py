@@ -16,8 +16,9 @@ class Job:
         self.hires_by_program = programs_hired
         self.hires_by_faculty = faculty_hired
         self.hires_by_work_term = work_term_hired
+        self.confidence = 0
 
     # [company, title, status, applicates per position, work duration, location, description, responsibilities, skills, pay, rating, num_rating]
     def to_list(self):
-        return [self.company, self.title, self.status, self.application_num / self.num_openings, self.work_duration, self.location,
+        return [self.confidence, self.company, self.title, self.status, self.application_num / self.num_openings, self.work_duration, self.location,
                 self.pay, self.rating, self.num_rating, self.hires_by_program, self.hires_by_faculty, self.hires_by_work_term, self.description, self.responsibilities, self.skills]
