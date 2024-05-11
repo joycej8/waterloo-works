@@ -1,6 +1,5 @@
-# values from 0 - 1
-
-work_duration:
-  4: 1
-  8: 0
-  12: 1
+work_duration: 4
+pay: 30
+program: "Computer Science/BCS"
+faculty: "Mathematics"
+work_term: 4

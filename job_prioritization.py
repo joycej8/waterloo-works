@@ -76,6 +76,3 @@ def get_status_value(status):
         return 1
     else:
         return 0
-
-
-
