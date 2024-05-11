@@ -29,7 +29,10 @@ class Config:
             logging.error(f"yaml contains no value {key}")
     
 config = Config('user_preferences.yaml')
-    
+
+def get_rating_value(rating):
+    return rating / 10
+
 def get_work_duration_value(duration):
     months = duration[0]
     if months == 4:
@@ -39,8 +42,8 @@ def get_work_duration_value(duration):
     else:
         return config.get_preference("work_duration", 12)
 
+# Using a exponential distribution, predict y value given x
 def get_confidence_value_exponential(point_estimate, x_value, max_value=70):
-    x_value_flipped = x_value
     x_value = max_value - x_value
 
     scale = max(1, max_value - point_estimate)  # Determine the scale based on the point_estimate
@@ -49,31 +52,11 @@ def get_confidence_value_exponential(point_estimate, x_value, max_value=70):
     pdf_values = expon.pdf(x_positive, scale=scale)  # Calculate the PDF for these x values
     max_pdf_value = np.max(pdf_values)
 
-    # Normalize the PDF values so that the maximum is 1
-    pdf_normalized = pdf_values / max_pdf_value
-
     # Calculate y_value_at_x using the same scale and then normalize it using the max of the normalized PDF
     y_value_at_x = expon.pdf(x_value, scale=scale)
     normalized_y_value_at_x = y_value_at_x / max_pdf_value  # Use max of original pdf_values to align with pdf_normalized
 
-    # To flip along the x-axis, add the max_value to negative x values
-    x_flipped = -x_positive + max_value
-
-    # Plotting
-    plt.figure(figsize=(8, 4))
-    plt.axvline(x_value_flipped, color='red', linestyle='--', label=f'Given x={x_value_flipped} (y={normalized_y_value_at_x:.3f})')
-    plt.plot(x_flipped, pdf_normalized, label='Exponential Distribution', color='blue')
-    plt.title('Exponential Distribution Normalized')
-    plt.xlabel('x')
-    plt.ylabel('Normalized Density')
-    plt.legend()
-    plt.grid(True)
-    plt.show()
-
     return normalized_y_value_at_x
-
-# Example usage
-get_confidence_value_exponential(40, 60) 
 
 # Using a gaussian distribution, predict y value given x
 def get_confidence_value_gaussian(point_estimator, x_value, std_dev=0.1):

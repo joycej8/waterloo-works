@@ -39,7 +39,7 @@ def login(username, password):
 
     # time to put in duo code for 2fa. #TODO: make it automatic if possible
     logging.info("Waiting for duo authentication to complete")
-    time.sleep(25)
+    time.sleep(15)
 
 # get all jobs from all pages in Shortlist page
 def get_shortlisted_info():
@@ -105,14 +105,14 @@ def _get_shortlist_info(shortlisted):
             company = row.find_elements(By.TAG_NAME, "td")[4].accessible_name
             title = row.find_elements(By.TAG_NAME, "td")[3].accessible_name
             status = row.find_elements(By.TAG_NAME, "td")[7].accessible_name
-            application_num = row.find_elements(By.TAG_NAME, "td")[10].accessible_name
+            application_num = int(row.find_elements(By.TAG_NAME, "td")[10].accessible_name)
 
             # Get detailed info through View button         
             view_dropdown = row.find_element(By.PARTIAL_LINK_TEXT, "View")
             view_dropdown.click()
             wait.until(EC.element_to_be_clickable((By.PARTIAL_LINK_TEXT, "new tab"))).click()
             driver.switch_to.window(driver.window_handles[1])
-            
+
             # wait until page loads
             wait.until(EC.presence_of_element_located((By.XPATH, "//*[text()='Job Posting Information']")))
 
@@ -129,17 +129,17 @@ def _get_shortlist_info(shortlisted):
 # get job info from page
 def scrape_job(company, title, status, application_num):
     try:
-        num_openings = _get_table_value('Job Openings:')
+        num_openings = int(_get_table_value('Job Openings:'))
         work_duration = _get_table_value('Work Term Duration:')
         location = _get_table_value('City') + ", " + _get_table_value('Country:')
         description = _get_table_value('Job Summary:')
         responsibilities = _get_table_value('Job Responsibilities:')
         skills = _get_table_value('Required Skills:')
         pay = _get_table_value('Compensation and Benefits Information:')
-        rating, num_rating = _get_ratings()
+        rating, num_rating, programs_hired, faculty_hired, work_term_hired = _get_ratings_and_hiring_history()
 
         # [company, title, applicates per position, work duration, location, description, responsibilities, skills, pay, rating, num_rating]
-        job = Job(company, title, status, int(application_num), int(num_openings), work_duration, location, description, responsibilities, skills, pay, rating, num_rating)
+        job = Job(company, title, status, application_num, num_openings, work_duration, location, description, responsibilities, skills, pay, rating, num_rating, programs_hired, faculty_hired, work_term_hired)
 
         logging.info(f"Finished {company} {title}")
         return job
@@ -148,7 +148,7 @@ def scrape_job(company, title, status, application_num):
         logging.error(f"Exception at {company} - {title}. {e}")
 
 # get rating info
-def _get_ratings():
+def _get_ratings_and_hiring_history():
     try:
         rating_element = driver.find_elements(By.XPATH, "//a[contains(text(), 'Work Term Ratings')]//span[@class='badge badge-info']")
 
@@ -156,14 +156,46 @@ def _get_ratings():
         if rating_element:
             wait.until(EC.element_to_be_clickable((By.PARTIAL_LINK_TEXT, "Work Term Ratings"))).click()
             wait.until(EC.presence_of_element_located((By.XPATH, "//*[text()='Work Term Ratings Summary']"))) # wait until page loads
-            rating = __get_table_value_with_index(2)
-            num_ratings = int(__get_table_value_with_index(3))
-            return rating, num_ratings
+            time.sleep(0.5) # TODO: have a better fix
+            rating = _get_table_value_with_index(2)
+            num_ratings = int(_get_table_value_with_index(3))
+            programs_hired = _get_most_freq_hired_programs()
+            faculty_hired = _get_hire_by_faculty()
+            work_term_hired = _get_hires_by_work_term()
+            return rating, num_ratings, programs_hired, faculty_hired, work_term_hired
         else:
-            return "", ""
+            return "", "", "", "", ""
 
     except Exception as e:
         logging.error(e)
+
+def _get_hire_by_faculty():
+    faculties = driver.find_elements(By.XPATH, "//*[name()='svg']//*[name()='tspan'][contains(., 'Hires by Faculty')]/ancestor::*[name()='text']/following-sibling::*[contains(@class, 'highcharts-data-labels highcharts-tracker')]//*[name()='tspan'][contains(@style, 'font-weight:bold')]")
+    percentages = driver.find_elements(By.XPATH, "//*[name()='svg']//*[name()='tspan'][contains(., 'Hires by Faculty')]/ancestor::*[name()='text']/following-sibling::*[contains(@class, 'highcharts-data-labels highcharts-tracker')]//*[name()='tspan'][@dx='0']")
+
+    faculty_names = [faculty.text for faculty in faculties if faculty.text]
+    percentage_numbers = [int(percentage.text[2:-1])/100 for percentage in percentages if percentage.text]
+
+    return dict(zip(faculty_names, percentage_numbers))
+
+def _get_hires_by_work_term():
+    work_terms = driver.find_elements(By.XPATH, "//*[name()='svg']//*[name()='tspan'][contains(., 'Hires by Student Work Term Number')]/ancestor::*[name()='text']/following-sibling::*[contains(@class, 'highcharts-data-labels highcharts-tracker')]//*[name()='tspan'][contains(@style, 'font-weight:bold')]")
+    percentages = driver.find_elements(By.XPATH, "//*[name()='svg']//*[name()='tspan'][contains(., 'Hires by Student Work Term Number')]/ancestor::*[name()='text']/following-sibling::*[contains(@class, 'highcharts-data-labels highcharts-tracker')]//*[name()='tspan'][@dx='0']")
+
+    work_term_names = [work_term.text for work_term in work_terms if work_term.text]
+    percentage_numbers = [int(percentage.text[2:-1])/100 for percentage in percentages if percentage.text]
+
+    return dict(zip(work_term_names, percentage_numbers))
+
+def _get_most_freq_hired_programs():
+    programs = driver.find_elements(By.XPATH, "//*[name()='svg']//*[name()='tspan'][contains(., 'Most Frequently Hired Programs')]/ancestor::*[name()='text']/following-sibling::*[contains(@class, 'highcharts-axis-labels highcharts-xaxis-labels')]//*[name()='tspan']")
+    hires = driver.find_elements(By.XPATH, "//*[name()='svg']//*[name()='tspan'][contains(., 'Most Frequently Hired Programs')]/ancestor::*[name()='text']/following-sibling::*[contains(@class, 'highcharts-data-labels highcharts-tracker')]//*[name()='tspan']")
+
+    # Extracting text from selected elements
+    program_names = [program.text for program in programs if program.text]
+    hire_numbers = [int(hire.text) for hire in hires if hire.text]
+
+    return dict(zip(program_names, hire_numbers))
 
 # get value of job information given table key
 def _get_table_value(key):
@@ -177,9 +209,9 @@ def _get_table_value(key):
 
     except Exception as e:
         logging.error(f"Exception on key {key}", e)
-    
+
 # get value of job information given table key
-def __get_table_value_with_index(index):
+def _get_table_value_with_index(index):
     try:
         xpath_expression = f"(//table[@class='table table-bordered table-striped'])[2]//td[contains(., 'Employer Organization')]/following-sibling::td[{index}]"
         value = driver.find_elements(By.XPATH, xpath_expression)
@@ -197,34 +229,38 @@ def _sort_shortlisted(shortlisted):
 
 # insert into excel
 def _insert_to_excel(shortlisted):
-    logging.info("Inserting shortlisted data info into excel")
+    try:
+        logging.info("Inserting shortlisted data info into excel")
 
-    column_names = ["Company", "Title", "Status", "Applicants Per Position", "Work Duration", "Location", "Pay", "Rating", "Num Ratings", "Description", "Responsibilities", "Skills"]
-    job_items = []
+        column_names = ["Company", "Title", "Status", "Applicants Per Position", "Work Duration", "Location", "Pay", "Rating", "Num Ratings", "Hires By Program", "Hires By Faculty", "Hires By Work Term", "Description", "Responsibilities", "Skills"]
+        job_items = []
 
-    # object to list
-    for job in shortlisted:
-        item = job.to_list()
-        job_items.append(item)
+        # object to list
+        for job in shortlisted:
+            item = job.to_list()
+            job_items.append(item)
 
-    df = pd.DataFrame(job_items, columns=column_names)
+        df = pd.DataFrame(job_items, columns=column_names)
 
-    # Create a Pandas Excel writer using XlsxWriter as the engine
-    file_name = "waterloo_works_shortlist.xlsx"
-    sheet_name = 'Waterloo Works Shortlist'
-    writer = pd.ExcelWriter(file_name, engine='xlsxwriter')
+        # Create a Pandas Excel writer using XlsxWriter as the engine
+        file_name = "waterloo_works_shortlist.xlsx"
+        sheet_name = 'Waterloo Works Shortlist'
+        writer = pd.ExcelWriter(file_name, engine='xlsxwriter')
 
-    with pd.ExcelWriter(file_name, engine='openpyxl') as writer:
-        df.to_excel(writer, sheet_name=sheet_name, index=False)
-        worksheet = writer.sheets[sheet_name]
-        max_width = 80
+        with pd.ExcelWriter(file_name, engine='openpyxl') as writer:
+            df.to_excel(writer, sheet_name=sheet_name, index=False)
+            worksheet = writer.sheets[sheet_name]
+            max_width = 80
 
-        for i, col in enumerate(df.columns):
-            max_len = min(max(df[col].astype(str).apply(len).max(), len(col)), max_width)
-            worksheet.column_dimensions[worksheet.cell(row=1, column=i+1).column_letter].width = max_len + 2
-            worksheet.column_dimensions[worksheet.cell(row=1, column=i+1).column_letter].alignment = openpyxl.styles.Alignment(wrap_text=True)
-    
-    logging.info(f"Finished inserting shortlisted data info into {file_name}")
+            for i, col in enumerate(df.columns):
+                max_len = min(max(df[col].astype(str).apply(len).max(), len(col)), max_width)
+                worksheet.column_dimensions[worksheet.cell(row=1, column=i+1).column_letter].width = max_len + 2
+                worksheet.column_dimensions[worksheet.cell(row=1, column=i+1).column_letter].alignment = openpyxl.styles.Alignment(wrap_text=True)
+        
+        logging.info(f"Finished inserting shortlisted data info into {file_name}")
+
+    except Exception as e:
+        logging.error(f"{e}")
 
 def main():
     try:
