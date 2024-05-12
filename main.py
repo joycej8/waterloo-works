@@ -157,8 +157,8 @@ def _get_ratings_and_hiring_history():
         # Check if there is at least one <span> element
         if rating_element:
             wait.until(EC.element_to_be_clickable((By.PARTIAL_LINK_TEXT, "Work Term Ratings"))).click()
-            wait.until(EC.presence_of_element_located((By.XPATH, "//*[text()='Work Term Ratings Summary']"))) # wait until page loads
-            time.sleep(0.5) # TODO: have a better fix
+            #wait.until(EC.presence_of_element_located((By.XPATH, "//*[text()='Work Term Ratings Summary']"))) # wait until page loads
+            time.sleep(0.3) # TODO: have a better fix
             rating = float(_get_table_value_with_index(2))
             num_ratings = int(_get_table_value_with_index(3))
             programs_hired = _get_most_freq_hired_programs()

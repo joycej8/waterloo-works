@@ -3,7 +3,7 @@ import yaml
 import logging
 from scipy.stats import norm
 from scipy.stats import expon
-import matplotlib.pyplot as plt
+import re
 
 logging.getLogger().setLevel(logging.INFO)
 
@@ -83,14 +83,14 @@ def get_dict_value(key, dict_values):
         else:
             return 0
     else:
-        return 0.1
+        return 0.2
 
 # for rating
 def get_rating_value(rating):
     if rating:
         return rating / 10
     else:
-        return 0.5
+        return 0.85
 
 # for program
 def get_program_value(program, programs):
@@ -102,7 +102,7 @@ def get_program_value(program, programs):
         else:
             return 0
     else:
-        return 0.05
+        return 0.1
 
 # for employment_duration_months
 def is_preference_matched(user_preference_value, value):
@@ -116,9 +116,17 @@ def is_preference_matched(user_preference_value, value):
 def get_location_value(user_preference_location, location):
     return user_preference_location[location]
 
-# TODO: for pay
-def get_confidence_value_exponential(point_estimate, x_value, max_value=70):
-    if type(x_value) == int: # TODO: parse pay to int properly
+# for pay
+def get_confidence_value_exponential(point_estimate, pay_string, min_value = 18, max_value=70):
+    possible_pay_list = [int(s) for s in re.findall(r'\$(\d+)', pay_string)] # reg expression to find all numbers with $ preceeding
+
+    x_value = None
+    for pay in possible_pay_list:
+        if min_value < pay < max_value: # looking at hourly rate
+            if x_value == None or pay < x_value: # based by the lowest pay range
+                x_value = pay
+
+    if x_value:
         x_value = max_value - x_value
         scale = max(1, max_value - point_estimate)
         y_value_at_x = expon.pdf(x_value, scale=scale)
@@ -126,7 +134,7 @@ def get_confidence_value_exponential(point_estimate, x_value, max_value=70):
         scale = max(1, max_value - point_estimate)
         y_value_at_x = expon.pdf(scale, scale=scale)
 
-    x_positive = np.linspace(18, max_value, 1000)  # Generate x values
+    x_positive = np.linspace(min_value, max_value, 1000)  # Generate x values
     pdf_values = expon.pdf(x_positive, scale=scale)  # Calculate the PDF for these x values
     max_pdf_value = np.max(pdf_values)
 
