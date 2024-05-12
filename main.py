@@ -134,14 +134,14 @@ def scrape_job(company, title, status, application_num):
         work_duration = _get_table_value('Work Term Duration:')
         location_arrangement = _get_table_value('Employment Location Arrangement:')
         location = f"{_get_table_value('City')}, {_get_table_value('Province/State:')}, {_get_table_value('Country:')}"
+        additional_application = _get_table_value('Additional Application Information:')
         description = _get_table_value('Job Summary:')
         responsibilities = _get_table_value('Job Responsibilities:')
         skills = _get_table_value('Required Skills:')
         pay = _get_table_value('Compensation and Benefits:')
         rating, num_rating, programs_hired, faculty_hired, work_term_hired = _get_ratings_and_hiring_history()
 
-        # [company, title, status, applicates per position, work duration, location, location_arrangement, description, responsibilities, skills, pay, rating, num_rating]
-        job = Job(company, title, status, application_num, num_openings, work_duration, location, location_arrangement, description, responsibilities, skills, pay, rating, num_rating, programs_hired, faculty_hired, work_term_hired)
+        job = Job(company, title, status, application_num, num_openings, work_duration, location, location_arrangement, additional_application, description, responsibilities, skills, pay, rating, num_rating, programs_hired, faculty_hired, work_term_hired)
 
         logging.info(f"Finished {company} {title}")
         return job
@@ -230,15 +230,15 @@ def _insert_to_excel(shortlisted):
     try:
         logging.info("Inserting shortlisted data info into excel")
 
-        column_names = ["Compatibility", "Company", "Title", "Status", "Applicants Per Position", "Work Duration", "Location", "Location Arrangement", "Pay", "Rating", "Num Ratings", "Hires By Program", "Hires By Faculty", "Hires By Work Term", "Description", "Responsibilities", "Skills"]
-        job_items = []
+        column_names = Job.get_names()
+        all_job_items = []
 
-        # object to list
+        # get all job information to populate excel
         for job in shortlisted:
-            item = job.to_list()
-            job_items.append(item)
+            job_attributes = job.get_job_attributes()
+            all_job_items.append(job_attributes)
 
-        df = pd.DataFrame(job_items, columns=column_names)
+        df = pd.DataFrame(all_job_items, columns=column_names)
 
         # Create a Pandas Excel writer using XlsxWriter as the engine
         file_name = "waterloo_works_shortlist_sorted.xlsx"
