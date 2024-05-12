@@ -4,9 +4,14 @@ user_details:
   study_program: "Computer Science/BCS"
   academic_faculty: "Mathematics"
   current_work_term: "Fourth"
+  # weight from 0 to 1, where 1 indicates most valued
+  location_arrangement:
+    "In-person": 1
+    "Hybrid": 0.8
+    "Remote": 0
 
 # Priorities are assigned a weight from 1 to 10, where 10 indicates the highest priority.
-# TODO: better system
+# TODO: better system since order matters
 priority_weights:
   employment_duration_months: 8
   hourly_rate: 5
@@ -14,3 +19,4 @@ priority_weights:
   academic_faculty: 4
   current_work_term: 4
   rating: 7
+  location_arrangement: 8

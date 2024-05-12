@@ -132,15 +132,16 @@ def scrape_job(company, title, status, application_num):
     try:
         num_openings = int(_get_table_value('Job Openings:'))
         work_duration = _get_table_value('Work Term Duration:')
-        location = _get_table_value('City') + ", " + _get_table_value('Country:')
+        location_arrangement = _get_table_value('Employment Location Arrangement:')
+        location = f"{_get_table_value('City')}, {_get_table_value('Province/State:')}, {_get_table_value('Country:')}"
         description = _get_table_value('Job Summary:')
         responsibilities = _get_table_value('Job Responsibilities:')
         skills = _get_table_value('Required Skills:')
-        pay = _get_table_value('Compensation and Benefits Information:')
+        pay = _get_table_value('Compensation and Benefits:')
         rating, num_rating, programs_hired, faculty_hired, work_term_hired = _get_ratings_and_hiring_history()
 
-        # [company, title, applicates per position, work duration, location, description, responsibilities, skills, pay, rating, num_rating]
-        job = Job(company, title, status, application_num, num_openings, work_duration, location, description, responsibilities, skills, pay, rating, num_rating, programs_hired, faculty_hired, work_term_hired)
+        # [company, title, status, applicates per position, work duration, location, location_arrangement, description, responsibilities, skills, pay, rating, num_rating]
+        job = Job(company, title, status, application_num, num_openings, work_duration, location, location_arrangement, description, responsibilities, skills, pay, rating, num_rating, programs_hired, faculty_hired, work_term_hired)
 
         logging.info(f"Finished {company} {title}")
         return job
@@ -229,7 +230,7 @@ def _insert_to_excel(shortlisted):
     try:
         logging.info("Inserting shortlisted data info into excel")
 
-        column_names = ["Compatibility", "Company", "Title", "Status", "Applicants Per Position", "Work Duration", "Location", "Pay", "Rating", "Num Ratings", "Hires By Program", "Hires By Faculty", "Hires By Work Term", "Description", "Responsibilities", "Skills"]
+        column_names = ["Compatibility", "Company", "Title", "Status", "Applicants Per Position", "Work Duration", "Location", "Location Arrangement", "Pay", "Rating", "Num Ratings", "Hires By Program", "Hires By Faculty", "Hires By Work Term", "Description", "Responsibilities", "Skills"]
         job_items = []
 
         # object to list

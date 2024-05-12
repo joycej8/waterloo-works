@@ -38,6 +38,7 @@ config = Config('user_preferences.yaml')
 
 def sort_shortlisted_by_confidence(shortlisted):
     try:
+        # calculate compatibility score for all jobs in shortlist given user prefernces and priority
         for job in shortlisted:
             user_details = config.get_category("user_details")
 
@@ -47,12 +48,14 @@ def sort_shortlisted_by_confidence(shortlisted):
             academic_faculty_score = get_dict_value(user_details["academic_faculty"], job.hires_by_faculty)
             work_term_score = get_dict_value(user_details["current_work_term"], job.hires_by_work_term)
             rating_score = get_rating_value(job.rating)
+            location_arrangment_score = get_location_value(user_details["location_arrangement"], job.location_arrangement)
 
-            scores = [employment_duration_score, hourly_rate_score, study_program_score, academic_faculty_score, work_term_score, rating_score]
+            scores = [employment_duration_score, hourly_rate_score, study_program_score, academic_faculty_score, work_term_score, rating_score, location_arrangment_score]
             priority_weights = config.get_category("priority_weights").values()
-            
+
             calculate_confidence(job, scores, priority_weights)
 
+        # sort based on compatibility
         sorted_shortlist = sorted(shortlisted, key=lambda job: job.confidence, reverse=True)
         return sorted_shortlist
 
@@ -102,16 +105,20 @@ def get_program_value(program, programs):
         return 0.05
 
 # for employment_duration_months
-def is_preference_matched(value, user_preference_value):
-    user_preference_value = int(user_preference_value[0])
+def is_preference_matched(user_preference_value, value):
+    value = int(value[0])
     if value == user_preference_value:
         return 1
     else:
         return 0
-    
-# for pay
+
+# for location arrangment
+def get_location_value(user_preference_location, location):
+    return user_preference_location[location]
+
+# TODO: for pay
 def get_confidence_value_exponential(point_estimate, x_value, max_value=70):
-    if x_value:
+    if type(x_value) == int: # TODO: parse pay to int properly
         x_value = max_value - x_value
         scale = max(1, max_value - point_estimate)
         y_value_at_x = expon.pdf(x_value, scale=scale)
@@ -145,10 +152,5 @@ def get_confidence_value_gaussian(point_estimator, x_value, std_dev=0.1):
     normalized_y_value_at_x = y_value_at_x / pdf_values.max()
 
     return normalized_y_value_at_x
-    
-# TODO: for location
-def get_location_value(location):
-    # 0 for remote work?
-    pass
 
 # TODO: for desscription, responsibility, skills
